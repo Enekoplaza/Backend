@@ -1,89 +1,45 @@
 <?php
-
-
-//registro de usuario 
-
 require_once "conexion.php";
 
-function registroUsuario($username, $dni, $email, $password, $direccion)
-{
-
+function registroUsuario($nombre, $dni, $email, $password, $direccion, $rol) {
     $mysqli = conexionBBDD();
-    $mysqli->set_charset(charset: "utf8mb4");
-
-    $sql = "INSERT INTO users (username, dni, email, password_hash, direccion)
-     VALUES (?,?,?,?,?)";
-
-
-    $stmt = $mysqli->prepare($sql);
-    if (!$stmt) {
-        die("Error en preparación de la consulta: " . $mysqli->error);
-    }
-
-
+    
+    // Generar un token único para el QR (Requerido por tu SQL)
+    $qr_token = bin2hex(random_bytes(16));
     $password_hash = password_hash($password, PASSWORD_BCRYPT);
 
+    $sql = "INSERT INTO usuarios (nombre, dni, email, password, qr_token, direccion, rol) VALUES (?, ?, ?, ?, ?, ?, ?)";
+    $stmt = $mysqli->prepare($sql);
+    
+    if (!$stmt) return ["success" => false, "error" => $mysqli->error];
 
-    $stmt->bind_param("sssss", $username, $dni, $email, $password_hash, $direccion);
-
-
-    if (!$stmt->execute()) {
-        die("Error al ejecutar la consulta: " . $stmt->error);
-    }
-
-
+    $stmt->bind_param("sssssss", $nombre, $dni, $email, $password_hash, $qr_token, $direccion, $rol);
+    
+    $resultado = $stmt->execute();
     $stmt->close();
     cerrarConexion($mysqli);
 
-    return "Usuario registrado correctamente: $username ($email)";
+    return $resultado;
 }
-require_once "conexion.php";
 
-
-
-
-function login($username, $password)
-{
+function login($email, $password) {
     $mysqli = conexionBBDD();
-    $mysqli->set_charset("utf8mb4");
-
-
-    $sql = "SELECT * FROM usuarios WHERE nombre = ?";
-
+    // Buscamos por email, que es lo más común en logins modernos
+    $sql = "SELECT * FROM usuarios WHERE email = ?";
     $stmt = $mysqli->prepare($sql);
-
-
-    $stmt->bind_param("s", $username);
-
-
+    $stmt->bind_param("s", $email);
     $stmt->execute();
-
-
     $resultado = $stmt->get_result();
 
-
-    $usuario = null;
-    if ($resultado && $resultado->num_rows === 1) {
+    if ($resultado->num_rows === 1) {
         $usuario = $resultado->fetch_assoc();
-
-        // 🔑 Verificación de contraseña
-        if (password_verify($password, $usuario['password_hash'])) {
-            // Login correcto
-            $stmt->close();
+        if (password_verify($password, $usuario['password'])) {
             cerrarConexion($mysqli);
-            return json_encode($usuario, JSON_UNESCAPED_UNICODE);
-        } else {
-            $stmt->close();
-            cerrarConexion($mysqli);
-            return false; // contraseña incorrecta
+            return $usuario;
         }
     }
-    
-    $stmt->close();
     cerrarConexion($mysqli);
     return false;
 }
-
-
-require_once "conexion.php";
+?>
 

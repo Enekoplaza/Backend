@@ -1,39 +1,33 @@
 <?php
 session_start();
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Methods: POST, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type");
 header("Content-Type: application/json; charset=UTF-8");
 
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit;
 
 require_once "usuarios.php";
 
+$data = json_decode(file_get_contents('php://input'), true);
+$email = $data['email'] ?? null;
+$password = $data['password'] ?? null;
 
-$username   = $_GET['username']   ?? null;
-$password  = $_GET['password']  ?? null;
+$user = login($email, $password);
 
-
-
-$usersJson = login($username, $password);
-$users = json_decode($usersJson, true); 
-//var_dump($users);
-if (count($users) > 0) {
-
-    $_SESSION['user_id']   = $users['id'];
-    $_SESSION['username']  = $users['username'];
-    $_SESSION['rol']      = $users['rol'];   
-
-    $_SESSION['logged_in'] = true;
-
-
-
+if ($user) {
+    $_SESSION['user_id'] = $user['id'];
+    $_SESSION['rol'] = $user['rol'];
+    
     echo json_encode([
         'success' => true,
-        'user_id' => $users['id'],
-        'username' => $users['username'],
-        'rol' => $users['rol']  
+        'user' => [
+            'id' => $user['id'],
+            'nombre' => $user['nombre'],
+            'rol' => $user['rol']
+        ]
     ]);
 } else {
-    echo json_encode([
-        'success' => false,
-        'message' => 'Usuario o contraseña incorrectos'
-    ]);
+    echo json_encode(['success' => false, 'message' => 'Credenciales incorrectas']);
 }
 ?>

@@ -1,27 +1,19 @@
 <?php
-
-
 function conexionBBDD() {
+    $host = "localhost";
+    $user = "root";
+    $pass = "";
+    $db   = "laKobra"; 
 
-$nombreServidor = "localhost";
-$nombreUser = "root";
-$contraseña = "";
-$nombreBD = "laKobra";
-
-
-$conexion = mysqli_connect($nombreServidor, $nombreUser, $contraseña, $nombreBD )
-or die("Ha ocurrido un error a la hora de conectar con la bbdd");
-
-
-return $conexion;
-
+    $conexion = mysqli_connect($host, $user, $pass, $db);
+    if (!$conexion) {
+        die(json_encode(["error" => "Error de conexión: " . mysqli_connect_error()]));
+    }
+    $conexion->set_charset("utf8mb4");
+    return $conexion;
 }
 
 function cerrarConexion($conexion) {
-
- mysqli_close($conexion);
-
+    mysqli_close($conexion);
 }
-
-
 ?>
