@@ -1,19 +1,43 @@
 <?php
 session_start();
-header("Access-Control-Allow-Origin: http://localhost:5173");
+
+// 1️⃣ Permitir CORS
+header("Access-Control-Allow-Origin: http://localhost:5173"); // tu frontend
 header("Access-Control-Allow-Credentials: true");
-header("Content-Type: application/json");
+header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type");
+
+// 2️⃣ Responder a preflight OPTIONS
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
+}
+
+// 3️⃣ Conectar a la DB
 require 'db.php';
 
+// 4️⃣ Leer JSON
 $data = json_decode(file_get_contents('php://input'), true);
-$user_id = $data['user_id'] ?? 0;
+$user_id = $data['usuario_id'] ?? 0;
+$mensaje = $data['mensaje'] ?? '';
 
-if ($user_id) {
-    // Puedes crear una tabla de solicitudes de txandalari
-    $stmt = $db->prepare("INSERT INTO solicitudes_txandalari (user_id, fecha) VALUES (?, NOW())");
-    $ok = $stmt->execute([$user_id]);
-    echo json_encode(['ok'=>$ok]);
-} else {
-    echo json_encode(['ok'=>false]);
+// 5️⃣ Validar
+if (!$user_id) {
+    echo json_encode(['ok'=>false, 'message'=>'ID de usuario no proporcionado']);
+    exit;
+}
+
+// 6️⃣ Guardar solicitud
+try {
+    $stmt = $db->prepare("INSERT INTO solicitudes_txandalari (user_id, mensaje, fecha) VALUES (?, ?, NOW())");
+    $ok = $stmt->execute([$user_id, $mensaje]);
+
+    if ($ok) {
+        echo json_encode(['ok'=>true, 'message'=>'Solicitud enviada correctamente']);
+    } else {
+        echo json_encode(['ok'=>false, 'message'=>'Error al guardar la solicitud']);
+    }
+} catch (PDOException $e) {
+    echo json_encode(['ok'=>false, 'message'=>$e->getMessage()]);
 }
 ?>
