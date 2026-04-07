@@ -49,3 +49,4 @@ if ($res === true) {
     echo json_encode(['success' => false, 'message' => 'Error: El email o DNI ya existen en nuestra base de datos']);
 }
 ?>
+
