@@ -1,6 +1,5 @@
 <?php
 // --- check_sesion.php ---
-// Inicia la sesión y maneja CORS
 try {
     session_start();
 
@@ -13,19 +12,23 @@ try {
 
     header("Content-Type: application/json");
 
-    // Verificar que todas las variables necesarias existan
+    // AÑADIMOS LAS VARIABLES QUE FALTAN: dni, email, direccion
     if (isset($_SESSION['user_id'], $_SESSION['nombre'], $_SESSION['rol'])) {
         echo json_encode([
             'logged_in' => true,
+            'id'        => $_SESSION['user_id'],
             'nombre'    => $_SESSION['nombre'],
-            'rol'       => $_SESSION['rol']
+            'rol'       => $_SESSION['rol'],
+            'dni'       => $_SESSION['dni'] ?? '---',       // Enviamos el DNI
+            'email'     => $_SESSION['email'] ?? '---',     // Enviamos el Email
+            'direccion' => $_SESSION['direccion'] ?? '---', // Enviamos la Dirección
+            'solicitud_txandalari' => $_SESSION['solicitud_txandalari'] ?? 0
         ]);
     } else {
         echo json_encode(['logged_in' => false]);
     }
 
 } catch (Exception $e) {
-    // En caso de error inesperado, devolver JSON válido
     echo json_encode([
         'logged_in' => false,
         'error'     => $e->getMessage()
