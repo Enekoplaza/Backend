@@ -13,49 +13,54 @@ $mysqli = conexionBBDD();
 
 $data = json_decode(file_get_contents('php://input'), true);
 $id_evento = $data['id_evento'] ?? null;
-
-// Cogemos el usuario directamente de la sesión por seguridad
 $id_usuario = $_SESSION['user_id'] ?? null;
 
 if (!$id_evento || !$id_usuario) {
-    echo json_encode(['success' => false, 'message' => 'Debes iniciar sesión para apuntarte']);
+    echo json_encode(['success'=>false,'message'=>'Debes iniciar sesión']);
     exit;
 }
 
-// 1. Comprobamos si ya está apuntado
-$sql_check = "SELECT id FROM asistencias WHERE id_evento = ? AND id_usuario = ?";
-$stmt_check = $mysqli->prepare($sql_check);
-$stmt_check->bind_param("ii", $id_evento, $id_usuario);
+// 1. Comprobar si ya está apuntado
+$stmt_check = $mysqli->prepare("SELECT id FROM asistencias WHERE id_evento=? AND id_usuario=?");
+$stmt_check->bind_param("ii",$id_evento,$id_usuario);
 $stmt_check->execute();
 $result_check = $stmt_check->get_result();
 
 if ($result_check->num_rows > 0) {
-    // Si ya está apuntado -> LO DESAPUNTAMOS (Borramos de la tabla)
-    $sql_del = "DELETE FROM asistencias WHERE id_evento = ? AND id_usuario = ?";
-    $stmt_del = $mysqli->prepare($sql_del);
-    $stmt_del->bind_param("ii", $id_evento, $id_usuario);
+    // Desapuntar -> eliminar de asistencias y sumar 1 al aforo
+    $stmt_del = $mysqli->prepare("DELETE FROM asistencias WHERE id_evento=? AND id_usuario=?");
+    $stmt_del->bind_param("ii",$id_evento,$id_usuario);
     $stmt_del->execute();
-    
-    echo json_encode(['success' => true, 'accion' => 'desapuntado', 'message' => 'Te has borrado del evento']);
+
+    // SUMAR 1 a aforo_max en la base de datos
+    $stmt_aforo = $mysqli->prepare("UPDATE eventos SET aforo_max = aforo_max + 1 WHERE id = ?");
+    $stmt_aforo->bind_param("i",$id_evento);
+    $stmt_aforo->execute();
+
+    echo json_encode(['success'=>true,'accion'=>'desapuntado','message'=>'Te has borrado del evento']);
 } else {
-    // Si NO está apuntado -> Comprobamos aforo y LO APUNTAMOS
-    $sql_aforo = "SELECT aforo_max, (SELECT COUNT(*) FROM asistencias WHERE id_evento = ?) as ocupadas FROM eventos WHERE id = ?";
-    $stmt_aforo = $mysqli->prepare($sql_aforo);
-    $stmt_aforo->bind_param("ii", $id_evento, $id_evento);
+    // Apuntar -> comprobar aforo
+    $stmt_aforo = $mysqli->prepare("SELECT aforo_max FROM eventos WHERE id=?");
+    $stmt_aforo->bind_param("i",$id_evento);
     $stmt_aforo->execute();
     $res_aforo = $stmt_aforo->get_result()->fetch_assoc();
-    
-    if ($res_aforo['ocupadas'] >= $res_aforo['aforo_max']) {
-         echo json_encode(['success' => false, 'message' => 'Lo sentimos, el aforo está completo']);
-         exit;
+
+    if ($res_aforo['aforo_max'] <= 0) {
+        echo json_encode(['success'=>false,'message'=>'El aforo está completo']);
+        exit;
     }
 
-    $sql_ins = "INSERT INTO asistencias (id_evento, id_usuario) VALUES (?, ?)";
-    $stmt_ins = $mysqli->prepare($sql_ins);
-    $stmt_ins->bind_param("ii", $id_evento, $id_usuario);
+    // Insertar asistencia
+    $stmt_ins = $mysqli->prepare("INSERT INTO asistencias (id_evento,id_usuario) VALUES (?,?)");
+    $stmt_ins->bind_param("ii",$id_evento,$id_usuario);
     $stmt_ins->execute();
-    
-    echo json_encode(['success' => true, 'accion' => 'apuntado', 'message' => '¡Plaza reservada con éxito!']);
+
+    // RESTAR 1 a aforo_max en la base de datos
+    $stmt_update = $mysqli->prepare("UPDATE eventos SET aforo_max = aforo_max - 1 WHERE id = ?");
+    $stmt_update->bind_param("i",$id_evento);
+    $stmt_update->execute();
+
+    echo json_encode(['success'=>true,'accion'=>'apuntado','message'=>'¡Plaza reservada!']);
 }
 
 cerrarConexion($mysqli);
