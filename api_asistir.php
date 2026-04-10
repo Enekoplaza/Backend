@@ -30,11 +30,17 @@ $stmt_check->execute();
 $result_check = $stmt_check->get_result();
 
 if ($result_check->num_rows > 0) {
-    // Si ya está apuntado -> LO DESAPUNTAMOS (Borramos de la tabla)
+    // 1. Borramos de la tabla asistencias
     $sql_del = "DELETE FROM asistencias WHERE id_evento = ? AND id_usuario = ?";
     $stmt_del = $mysqli->prepare($sql_del);
     $stmt_del->bind_param("ii", $id_evento, $id_usuario);
     $stmt_del->execute();
+    
+    // 2. NUEVO: Borramos también de la tabla turnos (por si era un trabajador)
+    $sql_del_turno = "DELETE FROM turnos WHERE id_evento = ? AND id_usuario = ?";
+    $stmt_del_turno = $mysqli->prepare($sql_del_turno);
+    $stmt_del_turno->bind_param("ii", $id_evento, $id_usuario);
+    $stmt_del_turno->execute();
     
     echo json_encode(['success' => true, 'accion' => 'desapuntado', 'message' => 'Te has borrado del evento']);
 } else {

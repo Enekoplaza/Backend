@@ -2,7 +2,6 @@
 session_start();
 header("Access-Control-Allow-Origin: http://localhost:5173");
 header("Access-Control-Allow-Credentials: true");
-// ¡OJO! Hemos añadido PUT y DELETE a los métodos permitidos
 header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type");
 header("Content-Type: application/json; charset=UTF-8");
@@ -68,10 +67,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
     $aforo_max    = intval($data['aforo_max'] ?? 120);
     $estado       = $data['estado'] ?? 'pendiente';
 
-    $sql = "UPDATE eventos SET titulo=?, fecha_evento=?, hora_inicio=?, aforo_max=?, estado=? WHERE id=?";
-    $stmt = $mysqli->prepare($sql);
-    $stmt->bind_param("sssisi", $titulo, $fecha_evento, $hora_inicio, $aforo_max, $estado, $id);
-    if ($stmt->execute()) echo json_encode(['success' => true, 'message' => 'Evento actualizado correctamente']);
+    if ($id) {
+        // LÓGICA DE CANCELACIÓN: Si pasa a cancelado, vaciamos listas
+        if ($estado === 'cancelado') {
+            $stmt_del1 = $mysqli->prepare("DELETE FROM asistencias WHERE id_evento = ?");
+            $stmt_del1->bind_param("i", $id);
+            $stmt_del1->execute();
+            
+            $stmt_del2 = $mysqli->prepare("DELETE FROM turnos WHERE id_evento = ?");
+            $stmt_del2->bind_param("i", $id);
+            $stmt_del2->execute();
+        }
+
+        $sql = "UPDATE eventos SET titulo=?, fecha_evento=?, hora_inicio=?, aforo_max=?, estado=? WHERE id=?";
+        $stmt = $mysqli->prepare($sql);
+        $stmt->bind_param("sssisi", $titulo, $fecha_evento, $hora_inicio, $aforo_max, $estado, $id);
+        if ($stmt->execute()) echo json_encode(['success' => true, 'message' => 'Evento actualizado correctamente']);
+    }
     exit;
 }
 

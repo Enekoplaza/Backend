@@ -1,11 +1,8 @@
 <?php
-
-//--------Este archivo se encargará de las 3 cosas del perfil:--------------------- 
-//--------Obtener tus eventos (GET), actualizar tus datos (PUT) y pedir ser Txandalari (PATCH).---------
 session_start();
 header("Access-Control-Allow-Origin: http://localhost:5173");
 header("Access-Control-Allow-Credentials: true");
-header("Access-Control-Allow-Methods: GET, PUT, PATCH, OPTIONS");
+header("Access-Control-Allow-Methods: GET, POST, PUT, PATCH, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type");
 header("Content-Type: application/json; charset=UTF-8");
 
@@ -21,13 +18,15 @@ if (!$user_id) {
     exit;
 }
 
-// 1. GET: OBTENER MIS EVENTOS APUNTADOS
+// 1. GET: OBTENER MIS EVENTOS APUNTADOS Y MI TURNO
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-    $sql = "SELECT e.* FROM eventos e 
+    $sql = "SELECT e.*, t.puesto 
+            FROM eventos e 
             INNER JOIN asistencias a ON e.id = a.id_evento 
+            LEFT JOIN turnos t ON e.id = t.id_evento AND t.id_usuario = ?
             WHERE a.id_usuario = ? ORDER BY e.fecha_evento ASC";
     $stmt = $mysqli->prepare($sql);
-    $stmt->bind_param("i", $user_id);
+    $stmt->bind_param("ii", $user_id, $user_id);
     $stmt->execute();
     $result = $stmt->get_result();
     
@@ -39,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     exit;
 }
 
-// 2. PUT: ACTUALIZAR MIS DATOS (Nombre, DNI, Email, Dirección)
+// 2. PUT: ACTUALIZAR MIS DATOS
 if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
     $data = json_decode(file_get_contents('php://input'), true);
     $nombre = trim($data['nombre'] ?? '');
@@ -61,17 +60,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
 
 // 3. PATCH: SOLICITAR SER TXANDALARI
 if ($_SERVER['REQUEST_METHOD'] === 'PATCH') {
-    // Cambiamos el 0 por el 1 en la tabla de usuarios
     $sql = "UPDATE usuarios SET solicitud_txandalari = 1 WHERE id = ?";
     $stmt = $mysqli->prepare($sql);
     $stmt->bind_param("i", $user_id);
-    
-    if ($stmt->execute()) {
-        echo json_encode(['success' => true, 'message' => 'Solicitud enviada']);
-    } else {
-        echo json_encode(['success' => false, 'message' => 'Error al solicitar']);
-    }
+    if ($stmt->execute()) echo json_encode(['success' => true, 'message' => 'Solicitud enviada']);
     exit;
+}
+
+// 4. POST: ASIGNAR TURNO (CORREGIDO PARA NO DUPLICAR)
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $data = json_decode(file_get_contents('php://input'), true);
+    
+    if (isset($data['accion']) && $data['accion'] === 'asignar_turno') {
+        $id_evento = $data['id_evento'];
+        $puesto = $data['puesto']; // Puede estar vacío
+        
+        if ($puesto) {
+            // 1º Comprobamos si el usuario ya tiene algún puesto asignado en este evento
+            $check_sql = "SELECT id FROM turnos WHERE id_evento = ? AND id_usuario = ?";
+            $stmt_check = $mysqli->prepare($check_sql);
+            $stmt_check->bind_param("ii", $id_evento, $user_id);
+            $stmt_check->execute();
+            $res_check = $stmt_check->get_result();
+
+            if ($res_check->num_rows > 0) {
+                // Si ya existe, simplemente ACTUALIZAMOS la palabra (ej: de 'barra' a 'puerta')
+                $update_sql = "UPDATE turnos SET puesto = ? WHERE id_evento = ? AND id_usuario = ?";
+                $stmt_upd = $mysqli->prepare($update_sql);
+                $stmt_upd->bind_param("sii", $puesto, $id_evento, $user_id);
+                $stmt_upd->execute();
+            } else {
+                // Si NO existe, CREAMOS un registro nuevo
+                $insert_sql = "INSERT INTO turnos (id_evento, id_usuario, puesto) VALUES (?, ?, ?)";
+                $stmt_ins = $mysqli->prepare($insert_sql);
+                $stmt_ins->bind_param("iis", $id_evento, $user_id, $puesto);
+                $stmt_ins->execute();
+            }
+            echo json_encode(['success' => true]);
+        } else {
+            // Si elige "Sin puesto", lo borramos de la tabla turnos
+            $sql = "DELETE FROM turnos WHERE id_evento = ? AND id_usuario = ?";
+            $stmt = $mysqli->prepare($sql);
+            $stmt->bind_param("ii", $id_evento, $user_id);
+            if ($stmt->execute()) echo json_encode(['success' => true]);
+        }
+        exit;
+    }
 }
 
 cerrarConexion($mysqli);
