@@ -1,36 +1,33 @@
 <?php
-// --- CONFIGURACIÓN CORS (Añade esto al principio del todo) ---
 header("Access-Control-Allow-Origin: http://localhost:5173"); 
 header("Access-Control-Allow-Credentials: true");
 header("Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
 
-// Manejo de peticiones pre-flight (OPTIONS)
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
-// -----------------------------------------------------------
 
 require_once 'conexion.php';
 header('Content-Type: application/json');
 $conexion = conexionBBDD();
 
 // =========================
-// GET: obtener solicitudes
+// GET: OBTENER SOLICITUDES
 // =========================
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $artistas = [];
     $txandalaris = [];
 
-    // ARTISTAS
-    $res1 = mysqli_query($conexion, "SELECT * FROM solicitudes_artistas");
+    // ARTISTAS (Ordenados por estado pendiente primero)
+    $res1 = mysqli_query($conexion, "SELECT * FROM solicitudes_artistas ORDER BY FIELD(estado, 'pendiente', 'aceptada'), fecha_solicitud DESC");
     if ($res1) {
         while ($row = mysqli_fetch_assoc($res1)) { $artistas[] = $row; }
     }
 
     // TXANDALARI (Socios con solicitud activa)
-    $res2 = mysqli_query($conexion, "SELECT * FROM usuarios WHERE solicitud_txandalari = 1");
+    $res2 = mysqli_query($conexion, "SELECT id, nombre, email, dni FROM usuarios WHERE solicitud_txandalari = 1");
     if ($res2) {
         while ($row = mysqli_fetch_assoc($res2)) { $txandalaris[] = $row; }
     }
@@ -59,19 +56,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $tipo = $data['tipo'] ?? 'txandalari';
 
     if ($tipo === 'artista') {
-        $stmt = $conexion->prepare("DELETE FROM solicitudes_artistas WHERE id = ?");
+        // CORRECCIÓN: Si aceptamos artista, cambiamos estado, NO lo borramos.
+        $stmt = $conexion->prepare("UPDATE solicitudes_artistas SET estado = 'aceptada' WHERE id = ?");
     } else {
+        // Txandalari: Le damos el rol y quitamos el aviso de solicitud pendiente
         $stmt = $conexion->prepare("UPDATE usuarios SET rol = 'txandalari', solicitud_txandalari = 0 WHERE id = ?");
     }
 
     $stmt->bind_param("i", $id);
     $ok = $stmt->execute();
 
-    echo json_encode([
-        "success" => $ok,
-        "message" => $ok ? "Actualizado correctamente" : "Error en la DB"
-    ]);
-
+    echo json_encode(["success" => $ok, "message" => $ok ? "Aceptado correctamente" : "Error en la DB"]);
     $stmt->close();
     cerrarConexion($conexion);
     exit;
@@ -86,16 +81,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
     $tipo = $data['tipo'] ?? 'txandalari';
 
     if ($tipo === 'artista') {
+        // Si rechazamos artista, lo borramos de la BD
         $stmt = $conexion->prepare("DELETE FROM solicitudes_artistas WHERE id = ?");
     } else {
+        // Si rechazamos Txandalari, le quitamos la petición pero sigue siendo socio
         $stmt = $conexion->prepare("UPDATE usuarios SET solicitud_txandalari = 0 WHERE id = ?");
     }
 
     $stmt->bind_param("i", $id);
     $ok = $stmt->execute();
 
-    echo json_encode(["success" => $ok]);
+    echo json_encode(["success" => $ok, "message" => "Rechazado correctamente"]);
     $stmt->close();
     cerrarConexion($conexion);
     exit;
 }
+?>
