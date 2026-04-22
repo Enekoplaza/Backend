@@ -113,8 +113,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 }
- // 5. DELETE: ELIMINAR CUENTA
+
+// 5. DELETE: ELIMINAR CUENTA
 if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
+
+    // --- SEGURIDAD: Evitar que un admin se borre a sí mismo ---
+    $rol_usuario = $_SESSION['rol'] ?? '';
+    if ($rol_usuario === 'admin') {
+        echo json_encode(['success' => false, 'message' => 'Seguridad: Los administradores no pueden eliminar su propia cuenta desde la web.']);
+        exit;
+    }
+    // ----------------------------------------------------------
 
     // Borramos primero datos relacionados (opcional pero recomendable)
     

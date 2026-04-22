@@ -2,6 +2,11 @@
 session_start();
 header("Access-Control-Allow-Origin: http://localhost:5173");
 header("Access-Control-Allow-Credentials: true");
+// --- LAS 3 LÍNEAS QUE FALTABAN PARA QUE EL NAVEGADOR NO BLOQUEE ---
+header("Access-Control-Allow-Methods: GET, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type");
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit;
+// -----------------------------------------------------------------
 header("Content-Type: application/json; charset=UTF-8");
 
 if (!isset($_SESSION['user_id'])) {
@@ -33,7 +38,7 @@ if ($user = $result->fetch_assoc()) {
         'direccion' => $user['direccion'],
         'rol' => $user['rol'],
         'solicitud_txandalari' => $user['solicitud_txandalari'],
-        'qr_token' => $user['qr_token'] // <--- AQUÍ SE ENVÍA A VUE
+        'qr_token' => $user['qr_token']
     ]);
 } else {
     echo json_encode(['logged_in' => false]);
