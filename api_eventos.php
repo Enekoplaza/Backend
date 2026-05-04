@@ -49,6 +49,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         echo json_encode(['success' => false, 'message' => 'Faltan campos obligatorios']);
         exit;
     }
+
+    // 🔒 SEGURIDAD: Bloquear fechas pasadas
+    $hoy = date('Y-m-d');
+    if ($fecha_evento < $hoy) {
+        echo json_encode(['success' => false, 'message' => 'No puedes crear eventos con una fecha anterior a hoy.']);
+        exit;
+    }
+
     $sql = "INSERT INTO eventos (titulo, fecha_evento, hora_inicio, aforo_max, estado, visible_publico) VALUES (?, ?, ?, ?, ?, 1)";
     $stmt = $mysqli->prepare($sql);
     $stmt->bind_param("sssis", $titulo, $fecha_evento, $hora_inicio, $aforo_max, $estado);

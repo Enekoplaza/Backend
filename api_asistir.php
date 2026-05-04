@@ -22,27 +22,40 @@ $id_evento = intval($data['id_evento'] ?? 0);
 $tarea = $data['tarea'] ?? null;
 
 if ($id_evento) {
-    // -------------------------------------------------------------
-    // ACCIÓN 1: APUNTARSE (Viene de Eventos.vue porque trae "tarea")
-    // -------------------------------------------------------------
+    
+    // 🔒 SEGURIDAD OBLIGATORIA: Comprobar la fecha del evento antes de hacer nada
+    $sql_fecha = "SELECT fecha_evento FROM eventos WHERE id = ?";
+    $stmt_fecha = $mysqli->prepare($sql_fecha);
+    $stmt_fecha->bind_param("i", $id_evento);
+    $stmt_fecha->execute();
+    $res_fecha = $stmt_fecha->get_result();
+    
+    if ($row = $res_fecha->fetch_assoc()) {
+        $hoy = date('Y-m-d');
+        if ($row['fecha_evento'] < $hoy) {
+            echo json_encode(['success' => false, 'message' => 'Este evento ya ha finalizado. No se permiten cambios de última hora.']);
+            exit;
+        }
+    } else {
+        echo json_encode(['success' => false, 'message' => 'El evento no existe']);
+        exit;
+    }
+    // -------------------------------------------------------------------------
+
+    // ACCIÓN 1: APUNTARSE
     if ($tarea !== null) {
-        
-        // 1. Lo metemos en ASISTENCIAS para restar la plaza (IGNORE evita errores si ya estaba)
         $sql_asist = "INSERT IGNORE INTO asistencias (id_evento, id_usuario) VALUES (?, ?)";
         $stmt_asist = $mysqli->prepare($sql_asist);
         $stmt_asist->bind_param("ii", $id_evento, $user_id);
         $stmt_asist->execute();
 
-        // 2. Le asignamos la TAREA en TURNOS
         if (in_array($tarea, ['puerta', 'barra', 'limpieza', 'otros'])) {
-            // Si ya tenía turno, lo actualiza (ON DUPLICATE KEY UPDATE)
             $sql_turno = "INSERT INTO turnos (id_evento, id_usuario, puesto) VALUES (?, ?, ?)
                           ON DUPLICATE KEY UPDATE puesto = ?";
             $stmt_turno = $mysqli->prepare($sql_turno);
             $stmt_turno->bind_param("iiss", $id_evento, $user_id, $tarea, $tarea);
             $stmt_turno->execute();
         } else {
-            // Si elige "Posturik ez", le borramos de turnos por si antes estaba en la puerta
             $sql_del_turno = "DELETE FROM turnos WHERE id_evento = ? AND id_usuario = ?";
             $stmt_del = $mysqli->prepare($sql_del_turno);
             $stmt_del->bind_param("ii", $id_evento, $user_id);
@@ -51,16 +64,12 @@ if ($id_evento) {
 
         echo json_encode(['success' => true, 'message' => 'Apuntado correctamente']);
     } 
-    // -------------------------------------------------------------
-    // ACCIÓN 2: CANCELAR (Viene de Perfil.vue porque NO trae "tarea")
-    // -------------------------------------------------------------
+    // ACCIÓN 2: CANCELAR
     else {
-        // Le borramos de ASISTENCIAS (libera aforo)
         $stmt_del_asist = $mysqli->prepare("DELETE FROM asistencias WHERE id_evento = ? AND id_usuario = ?");
         $stmt_del_asist->bind_param("ii", $id_evento, $user_id);
         $stmt_del_asist->execute();
 
-        // Le borramos de TURNOS
         $stmt_del_turno = $mysqli->prepare("DELETE FROM turnos WHERE id_evento = ? AND id_usuario = ?");
         $stmt_del_turno->bind_param("ii", $id_evento, $user_id);
         $stmt_del_turno->execute();
