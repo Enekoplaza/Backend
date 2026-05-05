@@ -17,32 +17,31 @@ require_once "conexion.php";
 $mysqli = conexionBBDD();
 
 $data = json_decode(file_get_contents('php://input'), true);
-$token = trim($data['qr_token'] ?? '');
+$dni = trim($data['dni'] ?? '');
 
-if (empty($token)) {
-    echo json_encode(['estado' => 'error', 'mensaje' => 'Token vacío']);
+if (empty($dni)) {
+    echo json_encode(['estado' => 'error', 'mensaje' => 'DNI vacío']);
     exit;
 }
 
-// LÓGICA OBLIGATORIA EN ORDEN EXACTO:
-
-// 1 y 2. Leer token y Buscar usuario
-$sql_user = "SELECT id, nombre FROM usuarios WHERE qr_token = ?";
+// 1 y 2. Buscar usuario por DNI
+$sql_user = "SELECT id, nombre FROM usuarios WHERE dni = ?";
 $stmt_user = $mysqli->prepare($sql_user);
-$stmt_user->bind_param("s", $token);
+$stmt_user->bind_param("s", $dni);
 $stmt_user->execute();
 $res_user = $stmt_user->get_result();
 
 if ($res_user->num_rows === 0) {
-    echo json_encode(['estado' => 'error', 'mensaje' => 'Token inválido o usuario no existe']);
+    echo json_encode(['estado' => 'error', 'mensaje' => 'DNI inválido o usuario no existe']);
     exit;
 }
+
 $usuario = $res_user->fetch_assoc();
 $id_usuario = $usuario['id'];
 $nombre_usuario = $usuario['nombre'];
 
 
-// 3. Buscar evento activo (HOY y Confirmado)
+// 3. Buscar evento activo (HOY y confirmado)
 $sql_evento = "SELECT id, aforo_max FROM eventos WHERE fecha_evento = CURDATE() AND estado = 'confirmado' LIMIT 1";
 $res_evento = $mysqli->query($sql_evento);
 
@@ -50,27 +49,30 @@ if ($res_evento->num_rows === 0) {
     echo json_encode(['estado' => 'Sin evento', 'mensaje' => 'No hay eventos confirmados para hoy']);
     exit;
 }
+
 $evento = $res_evento->fetch_assoc();
 $id_evento = $evento['id'];
 $aforo_max = $evento['aforo_max'];
 
 
-// 4. Comprobar duplicado (¿Ya entró hoy a este evento?)
+// 4. Comprobar duplicado
 $sql_duplicado = "SELECT id FROM asistencias WHERE id_evento = ? AND id_usuario = ?";
 $stmt_dup = $mysqli->prepare($sql_duplicado);
 $stmt_dup->bind_param("ii", $id_evento, $id_usuario);
 $stmt_dup->execute();
+
 if ($stmt_dup->get_result()->num_rows > 0) {
     echo json_encode(['estado' => 'Ya entró', 'nombre' => $nombre_usuario]);
     exit;
 }
 
 
-// 5 y 6. Contar asistentes y Comparar aforo
+// 5. Contar asistentes
 $sql_aforo = "SELECT COUNT(*) as total FROM asistencias WHERE id_evento = ?";
 $stmt_aforo = $mysqli->prepare($sql_aforo);
 $stmt_aforo->bind_param("i", $id_evento);
 $stmt_aforo->execute();
+
 $total_asistentes = $stmt_aforo->get_result()->fetch_assoc()['total'];
 
 if ($total_asistentes >= $aforo_max) {
@@ -79,17 +81,16 @@ if ($total_asistentes >= $aforo_max) {
 }
 
 
-// 7. Insertar asistencia
+// 6. Insertar asistencia
 $sql_insert = "INSERT INTO asistencias (id_evento, id_usuario) VALUES (?, ?)";
 $stmt_insert = $mysqli->prepare($sql_insert);
 $stmt_insert->bind_param("ii", $id_evento, $id_usuario);
 
 if ($stmt_insert->execute()) {
-    // 8. Devolver respuesta OK
     echo json_encode([
-        'estado' => 'OK', 
-        'nombre' => $nombre_usuario, 
-        'ocupacion' => ($total_asistentes + 1) . '/' . $aforo_max
+        'estado' => 'OK',
+        'nombre' => $nombre_usuario,
+        'ocupacion' => ($aforo_max - ($total_asistentes + 1)) . '/' . $aforo_max
     ]);
 } else {
     echo json_encode(['estado' => 'error', 'mensaje' => 'Fallo al registrar entrada']);
