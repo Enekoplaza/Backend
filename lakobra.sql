@@ -3,9 +3,9 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 26-03-2026 a las 10:22:20
+-- Tiempo de generación: 14-05-2026 a las 14:11:57
 -- Versión del servidor: 10.4.32-MariaDB
--- Versión de PHP: 8.2.12
+-- Versión de PHP: 8.0.30
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -34,6 +34,13 @@ CREATE TABLE `asistencias` (
   `fecha_hora_entrada` datetime DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
 
+--
+-- Volcado de datos para la tabla `asistencias`
+--
+
+INSERT INTO `asistencias` (`id`, `id_evento`, `id_usuario`, `fecha_hora_entrada`) VALUES
+(87, 27, 1, '2026-05-14 11:41:22');
+
 -- --------------------------------------------------------
 
 --
@@ -47,8 +54,16 @@ CREATE TABLE `eventos` (
   `hora_inicio` time DEFAULT NULL,
   `aforo_max` int(11) DEFAULT 120,
   `estado` enum('pendiente','confirmado','cancelado') DEFAULT 'pendiente',
-  `visible_publico` tinyint(1) DEFAULT 0
+  `visible_publico` tinyint(1) DEFAULT 0,
+  `txandalaris_max` int(11) DEFAULT 6
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
+
+--
+-- Volcado de datos para la tabla `eventos`
+--
+
+INSERT INTO `eventos` (`id`, `titulo`, `fecha_evento`, `hora_inicio`, `aforo_max`, `estado`, `visible_publico`, `txandalaris_max`) VALUES
+(27, 'GildosCup', '2026-05-14', '11:41:00', 120, 'confirmado', 1, 6);
 
 -- --------------------------------------------------------
 
@@ -78,6 +93,13 @@ CREATE TABLE `turnos` (
   `puesto` enum('barra','puerta','limpieza','otros') NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
 
+--
+-- Volcado de datos para la tabla `turnos`
+--
+
+INSERT INTO `turnos` (`id`, `id_evento`, `id_usuario`, `puesto`) VALUES
+(15, 27, 1, 'barra');
+
 -- --------------------------------------------------------
 
 --
@@ -95,6 +117,15 @@ CREATE TABLE `usuarios` (
   `rol` enum('admin','txandalari','socio') DEFAULT 'socio',
   `solicitud_txandalari` tinyint(1) DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
+
+--
+-- Volcado de datos para la tabla `usuarios`
+--
+
+INSERT INTO `usuarios` (`id`, `nombre`, `dni`, `email`, `password`, `qr_token`, `direccion`, `rol`, `solicitud_txandalari`) VALUES
+(1, 'Eneko', '12345678F', 'eneko@gmail.com', '$2y$10$eFD66D3MVokYPZkWSmZl1OpuvYoxLYOVDcNFHHtYnElU3fVUM5xjK', '5b57d94bf2a7c3532fa230aa4538e83a', 'aaa', 'admin', 0),
+(12, 'Monica', '22222222S', 'monica@gmail.com', '$2y$10$V9.tYqlKeH46gJfcyp.LDe21svkFQRaNcwmrMTqtbx0dNCDJsNdkm', '07d8077f3c1b090b012391f0ad30e606', 'Lonbo kalea', 'txandalari', 0),
+(14, 'plaza', '46366397F', 'enekoplazav9@gmail.com', '$2y$10$1y2IAojmODE5qK4R0r3SgOjC8d4a9Tnt7RZ7rwYAh9AYvK391hXTS', '8584f529c0fb8cd5e2d625c4fc25fc86', 'arrigorriaga', 'socio', 0);
 
 --
 -- Índices para tablas volcadas
@@ -145,31 +176,31 @@ ALTER TABLE `usuarios`
 -- AUTO_INCREMENT de la tabla `asistencias`
 --
 ALTER TABLE `asistencias`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=88;
 
 --
 -- AUTO_INCREMENT de la tabla `eventos`
 --
 ALTER TABLE `eventos`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=28;
 
 --
 -- AUTO_INCREMENT de la tabla `solicitudes_artistas`
 --
 ALTER TABLE `solicitudes_artistas`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT de la tabla `turnos`
 --
 ALTER TABLE `turnos`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
 
 --
 -- AUTO_INCREMENT de la tabla `usuarios`
 --
 ALTER TABLE `usuarios`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- Restricciones para tablas volcadas
