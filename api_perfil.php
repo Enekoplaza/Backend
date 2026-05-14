@@ -1,18 +1,19 @@
 <?php
 session_start();
-header("Access-Control-Allow-Origin: http://localhost:5173");
+
+// --- 1. CORS UNIVERSAL (Funciona en local y servidor) ---
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '*';
+header("Access-Control-Allow-Origin: $origin");
 header("Access-Control-Allow-Credentials: true");
-header("Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS");
+// Quitamos el POST de los métodos permitidos porque ya no se usa aquí
+header("Access-Control-Allow-Methods: GET, PUT, PATCH, DELETE, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
 header("Content-Type: application/json; charset=UTF-8");
 
-// Preflight
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
     exit;
 }
-
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit;
 
 require_once "conexion.php";
 $mysqli = conexionBBDD();
@@ -73,48 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'PATCH') {
     exit;
 }
 
-// 4. POST: ASIGNAR TURNO (CORREGIDO PARA NO DUPLICAR)
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $data = json_decode(file_get_contents('php://input'), true);
-    
-    if (isset($data['accion']) && $data['accion'] === 'asignar_turno') {
-        $id_evento = $data['id_evento'];
-        $puesto = $data['puesto']; // Puede estar vacío
-        
-        if ($puesto) {
-            // 1º Comprobamos si el usuario ya tiene algún puesto asignado en este evento
-            $check_sql = "SELECT id FROM turnos WHERE id_evento = ? AND id_usuario = ?";
-            $stmt_check = $mysqli->prepare($check_sql);
-            $stmt_check->bind_param("ii", $id_evento, $user_id);
-            $stmt_check->execute();
-            $res_check = $stmt_check->get_result();
-
-            if ($res_check->num_rows > 0) {
-                // Si ya existe, simplemente ACTUALIZAMOS la palabra (ej: de 'barra' a 'puerta')
-                $update_sql = "UPDATE turnos SET puesto = ? WHERE id_evento = ? AND id_usuario = ?";
-                $stmt_upd = $mysqli->prepare($update_sql);
-                $stmt_upd->bind_param("sii", $puesto, $id_evento, $user_id);
-                $stmt_upd->execute();
-            } else {
-                // Si NO existe, CREAMOS un registro nuevo
-                $insert_sql = "INSERT INTO turnos (id_evento, id_usuario, puesto) VALUES (?, ?, ?)";
-                $stmt_ins = $mysqli->prepare($insert_sql);
-                $stmt_ins->bind_param("iis", $id_evento, $user_id, $puesto);
-                $stmt_ins->execute();
-            }
-            echo json_encode(['success' => true]);
-        } else {
-            // Si elige "Sin puesto", lo borramos de la tabla turnos
-            $sql = "DELETE FROM turnos WHERE id_evento = ? AND id_usuario = ?";
-            $stmt = $mysqli->prepare($sql);
-            $stmt->bind_param("ii", $id_evento, $user_id);
-            if ($stmt->execute()) echo json_encode(['success' => true]);
-        }
-        exit;
-    }
-}
-
-// 5. DELETE: ELIMINAR CUENTA
+// 4. DELETE: ELIMINAR CUENTA
 if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
 
     // --- SEGURIDAD: Evitar que un admin se borre a sí mismo ---
@@ -125,8 +85,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
     }
     // ----------------------------------------------------------
 
-    // Borramos primero datos relacionados (opcional pero recomendable)
-    
     // Borrar turnos del usuario
     $stmt = $mysqli->prepare("DELETE FROM turnos WHERE id_usuario = ?");
     $stmt->bind_param("i", $user_id);
