@@ -16,20 +16,27 @@ header("Content-Type: application/json; charset=UTF-8");
 require_once "conexion.php";
 $mysqli = conexionBBDD();
 
-// --- GET: OBTENER EVENTOS ---
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $id_usuario_actual = $_SESSION['user_id'] ?? 0;
     
-    // Consulta mejorada para contar puestos específicos
+    // CONSULTA OPTIMIZADA:
+    // plazas_ocupadas: Cuenta personas en 'asistencias' que NO están en la tabla 'turnos' 
+    // (es decir, solo cuenta a los socios que van a disfrutar, no a los que van a trabajar).
+    
     $sql = "SELECT e.*, 
-            (SELECT COUNT(*) FROM asistencias WHERE id_evento = e.id) as plazas_ocupadas,
+            (SELECT COUNT(*) FROM asistencias a 
+             WHERE a.id_evento = e.id 
+             AND a.id_usuario NOT IN (SELECT t.id_usuario FROM turnos t WHERE t.id_evento = e.id)
+            ) as plazas_reales,
             (SELECT COUNT(*) FROM asistencias WHERE id_evento = e.id AND id_usuario = ?) as estoy_apuntado,
             (SELECT COUNT(*) FROM turnos WHERE id_evento = e.id) as txandalaris_apuntados,
             (SELECT COUNT(*) FROM turnos WHERE id_evento = e.id AND puesto = 'barra') as ocupacion_barra,
             (SELECT COUNT(*) FROM turnos WHERE id_evento = e.id AND puesto = 'puerta') as ocupacion_puerta,
             (SELECT COUNT(*) FROM turnos WHERE id_evento = e.id AND puesto = 'limpieza') as ocupacion_limpieza,
             (SELECT COUNT(*) FROM turnos WHERE id_evento = e.id AND puesto = 'otros') as ocupacion_otros
-            FROM eventos e ORDER BY fecha_evento ASC";
+            FROM eventos e 
+            WHERE e.visible_publico = 1
+            ORDER BY e.fecha_evento ASC";
     
     $stmt = $mysqli->prepare($sql);
     $stmt->bind_param("i", $id_usuario_actual);
@@ -39,70 +46,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $eventos = [];
     while ($fila = $resultado->fetch_assoc()) {
         $fila['estoy_apuntado'] = $fila['estoy_apuntado'] > 0;
-        $fila['plazas_libres'] = $fila['aforo_max'] - $fila['plazas_ocupadas'];
+        
+        // El aforo máximo menos los socios (los txandalaris no restan aquí)
+        $fila['plazas_libres'] = $fila['aforo_max'] - $fila['plazas_reales'];
+        
         $eventos[] = $fila;
     }
     echo json_encode(['success' => true, 'eventos' => $eventos]);
     exit;
 }
 
-// --- POST: CREAR EVENTO (Con txandalaris_max por defecto) ---
+// --- POST: CREAR EVENTO ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
-    $titulo          = trim($data['titulo'] ?? '');
-    $fecha_evento    = $data['fecha_evento'] ?? '';
-    $hora_inicio     = $data['hora_inicio'] ?? '';
-    $aforo_max       = intval($data['aforo_max'] ?? 120);
-    $txandalaris_max = intval($data['txandalaris_max'] ?? 6); // Valor por defecto
-    $estado          = $data['estado'] ?? 'pendiente';
+    $titulo = trim($data['titulo'] ?? '');
+    $fecha = $data['fecha_evento'] ?? '';
+    $hora = $data['hora_inicio'] ?? '';
+    $aforo = intval($data['aforo_max'] ?? 120);
+    $t_max = intval($data['txandalaris_max'] ?? 6);
+    $estado = $data['estado'] ?? 'pendiente';
 
     $sql = "INSERT INTO eventos (titulo, fecha_evento, hora_inicio, aforo_max, txandalaris_max, estado, visible_publico) VALUES (?, ?, ?, ?, ?, ?, 1)";
     $stmt = $mysqli->prepare($sql);
-    $stmt->bind_param("sssiis", $titulo, $fecha_evento, $hora_inicio, $aforo_max, $txandalaris_max, $estado);
+    $stmt->bind_param("sssiis", $titulo, $fecha, $hora, $aforo, $t_max, $estado);
     if ($stmt->execute()) echo json_encode(['success' => true]);
     exit;
 }
-// ... (El resto de PUT y DELETE siguen igual pero añadiendo txandalaris_max en el UPDATE)
+
 // --- PUT: EDITAR EVENTO ---
 if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
     $data = json_decode(file_get_contents('php://input'), true);
-    $id           = $data['id'] ?? null;
-    $titulo       = trim($data['titulo'] ?? '');
-    $fecha_evento = $data['fecha_evento'] ?? '';
-    $hora_inicio  = $data['hora_inicio'] ?? '';
-    $aforo_max    = intval($data['aforo_max'] ?? 120);
-    $estado       = $data['estado'] ?? 'pendiente';
-
+    $id = $data['id'] ?? null;
     if ($id) {
-        // LÓGICA DE CANCELACIÓN: Si pasa a cancelado, vaciamos listas
-        if ($estado === 'cancelado') {
-            $stmt_del1 = $mysqli->prepare("DELETE FROM asistencias WHERE id_evento = ?");
-            $stmt_del1->bind_param("i", $id);
-            $stmt_del1->execute();
-            
-            $stmt_del2 = $mysqli->prepare("DELETE FROM turnos WHERE id_evento = ?");
-            $stmt_del2->bind_param("i", $id);
-            $stmt_del2->execute();
-        }
-
-        $sql = "UPDATE eventos SET titulo=?, fecha_evento=?, hora_inicio=?, aforo_max=?, estado=? WHERE id=?";
+        $sql = "UPDATE eventos SET titulo=?, fecha_evento=?, hora_inicio=?, aforo_max=?, txandalaris_max=?, estado=? WHERE id=?";
         $stmt = $mysqli->prepare($sql);
-        $stmt->bind_param("sssisi", $titulo, $fecha_evento, $hora_inicio, $aforo_max, $estado, $id);
-        if ($stmt->execute()) echo json_encode(['success' => true, 'message' => 'Evento actualizado correctamente']);
+        $stmt->bind_param("sssiisi", $data['titulo'], $data['fecha_evento'], $data['hora_inicio'], $data['aforo_max'], $data['txandalaris_max'], $data['estado'], $id);
+        if ($stmt->execute()) echo json_encode(['success' => true]);
     }
     exit;
 }
 
-// --- DELETE: BORRAR EVENTO ---
+// --- DELETE: BORRAR ---
 if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
     $data = json_decode(file_get_contents('php://input'), true);
     $id = $data['id'] ?? null;
     if ($id) {
-        $sql = "DELETE FROM eventos WHERE id = ?";
-        $stmt = $mysqli->prepare($sql);
-        $stmt->bind_param("i", $id);
-        $stmt->execute();
-        echo json_encode(['success' => true, 'message' => 'Evento borrado correctamente']);
+        $mysqli->query("DELETE FROM eventos WHERE id = $id");
+        echo json_encode(['success' => true]);
     }
     exit;
 }
