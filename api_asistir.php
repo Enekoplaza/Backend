@@ -14,63 +14,72 @@ require_once "conexion.php";
 $mysqli = conexionBBDD();
 
 $user_id = $_SESSION['user_id'] ?? null;
-if (!$user_id) { echo json_encode(['success' => false, 'message' => 'No autorizado']); exit; }
+if (!$user_id) { 
+    echo json_encode(['success' => false, 'message' => 'No autorizado']); 
+    exit; 
+}
 
 $data = json_decode(file_get_contents('php://input'), true);
 $id_evento = intval($data['id_evento'] ?? 0);
-$tarea = $data['tarea'] ?? null;
+$id_tarea = isset($data['id_tarea']) ? intval($data['id_tarea']) : null;
 
 if ($id_evento) {
-    // ACCIÓN 1: APUNTARSE
-    if ($tarea !== null) {
+    
+    // ==========================================
+    // ACCIÓN 1: APUNTARSE A TRABAJAR (TXANDALARI)
+    // ==========================================
+    if ($id_tarea !== null && $id_tarea > 0) {
         
-        // 🔒 REGLA: Comprobar que no haya ya 2 personas en ese puesto
-        if (in_array($tarea, ['puerta', 'barra', 'limpieza', 'otros'])) {
-            $stmt_check = $mysqli->prepare("SELECT COUNT(*) FROM turnos WHERE id_evento = ? AND puesto = ?");
-            $stmt_check->bind_param("is", $id_evento, $tarea);
+        $mysqli->begin_transaction();
+        try {
+            // Comprobar el cupo de la tarea de trabajo
+            $sql_cupo = "SELECT t.limite_usuarios, 
+                        (SELECT COUNT(*) FROM turnos WHERE id_tarea = t.id) as ocupados 
+                        FROM evento_tareas t WHERE t.id = ?";
+            $stmt_check = $mysqli->prepare($sql_cupo);
+            $stmt_check->bind_param("i", $id_tarea);
             $stmt_check->execute();
-            $count = $stmt_check->get_result()->fetch_row()[0];
-            
-            if ($count >= 2) {
-                echo json_encode(['success' => false, 'message' => "El puesto de $tarea ya está completo (Máx 2)."]);
-                exit;
+            $res_cupo = $stmt_check->get_result()->fetch_assoc();
+
+            if (!$res_cupo) {
+                throw new Exception('Ez da txanda aurkitu / No se encontró la tarea.');
             }
-        }
 
-        // Si pasa la comprobación, insertamos
-        $sql_asist = "INSERT IGNORE INTO asistencias (id_evento, id_usuario) VALUES (?, ?)";
-        $stmt_asist = $mysqli->prepare($sql_asist);
-        $stmt_asist->bind_param("ii", $id_evento, $user_id);
-        $stmt_asist->execute();
+            if ($res_cupo['ocupados'] >= $res_cupo['limite_usuarios']) {
+                throw new Exception('Barkatu, txanda hau beteta dago (Turno lleno).');
+            }
 
-        if (in_array($tarea, ['puerta', 'barra', 'limpieza', 'otros'])) {
-            $sql_turno = "INSERT INTO turnos (id_evento, id_usuario, puesto) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE puesto = ?";
+            // 🌟 CLAVE: Aquí ya NO tocamos la tabla 'asistencias'. Solo guardamos el turno de trabajo.
+            $sql_turno = "INSERT INTO turnos (id_evento, id_usuario, id_tarea) VALUES (?, ?, ?) 
+                          ON DUPLICATE KEY UPDATE id_tarea = ?";
             $stmt_turno = $mysqli->prepare($sql_turno);
-            $stmt_turno->bind_param("iiss", $id_evento, $user_id, $tarea, $tarea);
+            $stmt_turno->bind_param("iiii", $id_evento, $user_id, $id_tarea, $id_tarea);
             $stmt_turno->execute();
-        } else {
-            $stmt_del = $mysqli->prepare("DELETE FROM turnos WHERE id_evento = ? AND id_usuario = ?");
-            $stmt_del->bind_param("ii", $id_evento, $user_id);
-            $stmt_del->execute();
+
+            $mysqli->commit();
+            echo json_encode(['success' => true, 'message' => 'Apuntado al turno correctamente']);
+            
+        } catch (Exception $e) {
+            $mysqli->rollback();
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
         }
-
-        echo json_encode(['success' => true, 'message' => 'Apuntado correctamente']);
     } 
-    // ACCIÓN 2: CANCELAR
+    
+    // ==========================================
+    // ACCIÓN 2: CANCELAR TURNO DE TRABAJO
+    // ==========================================
     else {
-        // ... (resto de la lógica de cancelar)
-        $stmt_del_asist = $mysqli->prepare("DELETE FROM asistencias WHERE id_evento = ? AND id_usuario = ?");
-        $stmt_del_asist->bind_param("ii", $id_evento, $user_id);
-        $stmt_del_asist->execute();
-
+        // 🌟 CLAVE: Al cancelar el turno, solo te borramos de la tabla de trabajo 'turnos'
         $stmt_del_turno = $mysqli->prepare("DELETE FROM turnos WHERE id_evento = ? AND id_usuario = ?");
         $stmt_del_turno->bind_param("ii", $id_evento, $user_id);
         $stmt_del_turno->execute();
 
-        echo json_encode(['success' => true, 'message' => 'Cancelado correctamente']);
+        echo json_encode(['success' => true, 'message' => 'Turno cancelado correctamente']);
     }
+
 } else {
     echo json_encode(['success' => false, 'message' => 'Falta el ID del evento']);
 }
+
 cerrarConexion($mysqli);
 ?>
