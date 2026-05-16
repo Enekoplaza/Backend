@@ -3,9 +3,9 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 15-05-2026 a las 14:29:36
+-- Tiempo de generación: 26-03-2026 a las 10:22:20
 -- Versión del servidor: 10.4.32-MariaDB
--- Versión de PHP: 8.0.30
+-- Versión de PHP: 8.2.12
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -24,55 +24,176 @@ SET time_zone = "+00:00";
 -- --------------------------------------------------------
 
 --
--- Estructura de tabla para la tabla `evento_tareas`
+-- Estructura de tabla para la tabla `asistencias`
 --
 
-CREATE TABLE `evento_tareas` (
+CREATE TABLE `asistencias` (
   `id` int(11) NOT NULL,
   `id_evento` int(11) NOT NULL,
-  `nombre_tarea` varchar(100) NOT NULL,
-  `limite_usuarios` int(11) NOT NULL DEFAULT 1
+  `id_usuario` int(11) NOT NULL,
+  `fecha_hora_entrada` datetime DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
 
+-- --------------------------------------------------------
+
 --
--- Volcado de datos para la tabla `evento_tareas`
+-- Estructura de tabla para la tabla `eventos`
 --
 
-INSERT INTO `evento_tareas` (`id`, `id_evento`, `nombre_tarea`, `limite_usuarios`) VALUES
-(13, 39, 'Taberna (Barra)', 4),
-(14, 39, 'Sarrera (Atea)', 2),
-(15, 39, 'Garbiketa', 2);
+CREATE TABLE `eventos` (
+  `id` int(11) NOT NULL,
+  `titulo` varchar(150) NOT NULL,
+  `fecha_evento` date NOT NULL,
+  `hora_inicio` time DEFAULT NULL,
+  `aforo_max` int(11) DEFAULT 120,
+  `max_puerta` int(11) DEFAULT 2,     -- 👈 NUEVO: Límite configurable para Puerta
+  `max_barra` int(11) DEFAULT 2,      -- 👈 NUEVO: Límite configurable para Barra
+  `max_limpieza` int(11) DEFAULT 2,   -- 👈 NUEVO: Límite configurable para Limpieza
+  `max_otros` int(11) DEFAULT 2,      -- 👈 NUEVO: Límite configurable para Otros
+  `estado` enum('pendiente','confirmado','cancelado') DEFAULT 'pendiente',
+  `visible_publico` tinyint(1) DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `solicitudes_artistas`
+--
+
+CREATE TABLE `solicitudes_artistas` (
+  `id` int(11) NOT NULL,
+  `nombre_artista` varchar(150) NOT NULL,
+  `email_contacto` varchar(100) NOT NULL,
+  `descripcion` text DEFAULT NULL,
+  `fecha_solicitud` datetime DEFAULT current_timestamp(),
+  `estado` enum('pendiente','aceptada','rechazada') DEFAULT 'pendiente'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `turnos`
+--
+
+CREATE TABLE `turnos` (
+  `id` int(11) NOT NULL,
+  `id_evento` int(11) NOT NULL,
+  `id_usuario` int(11) NOT NULL,
+  `puesto` enum('barra','puerta','limpieza','otros') NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `usuarios`
+--
+
+CREATE TABLE `usuarios` (
+  `id` int(11) NOT NULL,
+  `nombre` varchar(100) NOT NULL,
+  `dni` varchar(20) NOT NULL,
+  `email` varchar(100) NOT NULL,
+  `password` varchar(255) NOT NULL,
+  `qr_token` varchar(100) NOT NULL,
+  `direccion` varchar(255) DEFAULT NULL,
+  `rol` enum('admin','txandalari','socio') DEFAULT 'socio',
+  `solicitud_txandalari` tinyint(1) DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
 
 --
 -- Índices para tablas volcadas
 --
 
 --
--- Indices de la tabla `evento_tareas`
+-- Indices de la tabla `asistencias`
 --
-ALTER TABLE `evento_tareas`
+ALTER TABLE `asistencias`
   ADD PRIMARY KEY (`id`),
-  ADD KEY `id_evento` (`id_evento`);
+  ADD UNIQUE KEY `id_evento` (`id_evento`,`id_usuario`),
+  ADD KEY `id_usuario` (`id_usuario`);
+
+--
+-- Indices de la tabla `eventos`
+--
+ALTER TABLE `eventos`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indices de la tabla `solicitudes_artistas`
+--
+ALTER TABLE `solicitudes_artistas`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indices de la tabla `turnos`
+--
+ALTER TABLE `turnos`
+  ADD PRIMARY KEY (`id`),
+  -- 🔥 MEJORA DE SEGURIDAD: Cambiado (id_evento, id_usuario, puesto) por (id_evento, id_usuario)
+  -- Evita físicamente que un txandalari pueda estar registrado en dos puestos diferentes en el mismo evento.
+  ADD UNIQUE KEY `id_evento` (`id_evento`,`id_usuario`), 
+  ADD KEY `id_usuario` (`id_usuario`);
+
+--
+-- Indices de la tabla `usuarios`
+--
+ALTER TABLE `usuarios`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `dni` (`dni`),
+  ADD UNIQUE KEY `email` (`email`),
+  ADD UNIQUE KEY `qr_token` (`qr_token`);
 
 --
 -- AUTO_INCREMENT de las tablas volcadas
 --
 
 --
--- AUTO_INCREMENT de la tabla `evento_tareas`
+-- AUTO_INCREMENT de la tabla `asistencias`
 --
-ALTER TABLE `evento_tareas`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
+ALTER TABLE `asistencias`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT de la tabla `eventos`
+--
+ALTER TABLE `eventos`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT de la tabla `solicitudes_artistas`
+--
+ALTER TABLE `solicitudes_artistas`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT de la tabla `turnos`
+--
+ALTER TABLE `turnos`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT de la tabla `usuarios`
+--
+ALTER TABLE `usuarios`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- Restricciones para tablas volcadas
 --
 
 --
--- Filtros para la tabla `evento_tareas`
+-- Filtros para la tabla `asistencias`
 --
-ALTER TABLE `evento_tareas`
-  ADD CONSTRAINT `evento_tareas_ibfk_1` FOREIGN KEY (`id_evento`) REFERENCES `eventos` (`id`) ON DELETE CASCADE;
+ALTER TABLE `asistencias`
+  ADD CONSTRAINT `asistencias_ibfk_1` FOREIGN KEY (`id_evento`) REFERENCES `eventos` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `asistencias_ibfk_2` FOREIGN KEY (`id_usuario`) REFERENCES `usuarios` (`id`) ON DELETE CASCADE;
+
+--
+-- Filtros para la tabla `turnos`
+--
+ALTER TABLE `turnos`
+  ADD CONSTRAINT `turnos_ibfk_1` FOREIGN KEY (`id_evento`) REFERENCES `eventos` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `turnos_ibfk_2` FOREIGN KEY (`id_usuario`) REFERENCES `usuarios` (`id`) ON DELETE CASCADE;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
