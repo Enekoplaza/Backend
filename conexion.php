@@ -1,9 +1,9 @@
 <?php
 function conexionBBDD() {
     $host = "localhost";
-    $user = "root";
-    $pass = "";
-    $db   = "laKobra"; 
+    $user = "lakobra1";
+    $pass = "12345";
+    $db   = "lakobra1"; 
 
     $conexion = mysqli_connect($host, $user, $pass, $db);
     if (!$conexion) {

@@ -1,0 +1,9 @@
+# Permitir todos los métodos HTTP necesarios para la API
+<Limit GET POST PUT DELETE PATCH OPTIONS>
+    Require all granted
+</Limit>
+
+# Prevenir que Apache bloquee las peticiones de "pre-vuelo" (OPTIONS) de Vue
+RewriteEngine On
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule ^(.*)$ $1 [R=200,L]
