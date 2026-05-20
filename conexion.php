@@ -17,3 +17,6 @@ function cerrarConexion($conexion) {
     mysqli_close($conexion);
 }
 ?>
+
+
+
