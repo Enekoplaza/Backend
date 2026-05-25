@@ -1,0 +1,11 @@
+# 1. Permitir todos los métodos necesarios en el servidor
+<Limit GET POST PUT DELETE PATCH OPTIONS>
+    Require all granted
+</Limit>
+
+# 2. Responder a las peticiones OPTIONS sin usar el motor de reescritura (Evita fallos en XAMPP)
+# Si el método es OPTIONS, Apache le añade un estado 200 en seco directamente en las cabeceras
+<IfModule mod_headers.c>
+    SetEnvIf Request_Method "OPTIONS" IS_OPTIONS
+    Header set Access-Control-Allow-Status "200" env=IS_OPTIONS
+</IfModule>
